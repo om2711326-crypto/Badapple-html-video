@@ -5,18 +5,19 @@
     <title>Bad Apple ASCII Player</title>
     <style>
         body { background: black; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: monospace; }
-        #ascii-output { white-space: pre; line-height: 1.0; letter-spacing: 0; font-weight: bold; text-align: center; }
-        #controls { margin-top: 20px; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; }
-        input[type="file"] { margin-bottom: 10px; }
-        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; font-weight: bold; }
+        #ascii-output { white-space: pre; line-height: 0.9; letter-spacing: 0; font-weight: bold; text-align: center; color: #fff; text-shadow: 0 0 5px #fff; }
+        #controls { margin-top: 20px; padding: 15px; border: 1px solid #444; border-radius: 10px; text-align: center; }
+        #status { color: #ffcc00; margin-bottom: 10px; font-size: 0.9rem; }
+        button { padding: 10px 25px; cursor: pointer; background: #fff; color: #000; border: none; border-radius: 5px; font-weight: bold; }
         video { display: none; }
     </style>
 </head>
 <body>
-    <div id="ascii-output">영상을 선택하거나 재생 버튼을 눌러주세요.</div>
+    <div id="status">영상 파일을 선택해 주세요 (mp4 권장)</div>
+    <div id="ascii-output">READY</div>
 
     <div id="controls">
-        <input type="file" id="file-input" accept="video/*"><br>
+        <input type="file" id="file-input" accept="video/*"><br><br>
         <button id="btn">PLAY / PAUSE</button>
     </div>
 
@@ -28,44 +29,57 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const output = document.getElementById('ascii-output');
+        const status = document.getElementById('status');
         const btn = document.getElementById('btn');
         const fileInput = document.getElementById('file-input');
 
-        const asciiChars = " .-:=+*#%@"; 
-        const charRatio = 0.55; 
+        // ASCII 문자셋 (자료 기반: 밀도별 배치)
+        const asciiChars = " .:-=+*#%@";
+        const charRatio = 0.55; // 문자 너비 비율 보정
 
-        // 파일 선택 시 비디오 연결
         fileInput.onchange = (e) => {
             const file = e.target.files[0];
             if (file) {
-                video.src = URL.createObjectURL(file);
-                output.textContent = "영상이 로드되었습니다. 재생을 누르세요!";
+                const url = URL.createObjectURL(file);
+                video.src = url;
+                video.load(); // 강제 로드
+                status.textContent = `파일 로드 중: ${file.name}`;
             }
+        };
+
+        // 비디오 소스 에러 체크
+        video.onerror = () => {
+            status.textContent = "❌ 에러: 지원하지 않는 영상 형식입니다.";
+            console.error("Video Error Code:", video.error.code);
+        };
+
+        video.onloadedmetadata = () => {
+            status.textContent = "✅ 로드 완료! PLAY를 누르세요.";
         };
 
         function render() {
             if (video.paused || video.ended) return;
 
-            // 정수값 보장 (Math.floor 추가하여 'long' 타입 에러 방지)
-            const w = 120;
+            const w = 100; // 해상도 (성능과 가독성의 타협점)
             const h = Math.floor(w / (video.videoWidth / video.videoHeight) * charRatio);
             
-            if (isNaN(h) || h <= 0) { // 비디오 정보가 아직 없을 때 예외처리
+            if (h <= 0 || isNaN(h)) {
                 requestAnimationFrame(render);
                 return;
             }
 
             canvas.width = w;
             canvas.height = h;
-
             ctx.drawImage(video, 0, 0, w, h);
+
             const data = ctx.getImageData(0, 0, w, h).data;
             let art = "";
 
             for (let y = 0; y < h; y++) {
                 for (let x = 0; x < w; x++) {
                     const i = (y * w + x) * 4;
-                    const gray = (data[i] + data[i+1] + data[i+2]) / 3;
+                    // 명도 계산 (자료 알고리즘: 평균값)
+                    const gray = (data[i] + data[i+1] + data[i+2]) / 3; 
                     const charIdx = Math.floor((gray / 255) * (asciiChars.length - 1));
                     art += asciiChars[charIdx];
                 }
@@ -73,21 +87,28 @@
             }
 
             output.textContent = art;
-            output.style.fontSize = (window.innerWidth / w * 1.6) + "px";
+            // 화면 크기에 따른 폰트 최적화
+            const fontSize = Math.min(window.innerWidth / w * 1.6, window.innerHeight / h * 1.1);
+            output.style.fontSize = fontSize + "px";
 
             requestAnimationFrame(render);
         }
 
         btn.onclick = async () => {
+            if (!video.src) {
+                status.textContent = "⚠️ 파일을 먼저 선택해 주세요!";
+                return;
+            }
             try {
                 if (video.paused) {
-                    await video.play(); // play()가 완료될 때까지 대기하여 AbortError 방지
+                    await video.play();
                     render();
                 } else {
                     video.pause();
                 }
             } catch (err) {
-                console.error("재생 중 오류:", err);
+                status.textContent = "❌ 재생 실패: 브라우저가 파일을 거부했습니다.";
+                console.error(err);
             }
         };
     </script>
