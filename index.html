@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Bad Apple ASCII Art Player</title>
+    <style>
+        body { background: black; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: monospace; }
+        #ascii-output { white-space: pre; line-height: 1.2; letter-spacing: 0; font-weight: bold; }
+        #controls { margin-top: 20px; }
+        button { padding: 10px 20px; cursor: pointer; background: #333; color: white; border: 1px solid #666; }
+        video { display: none; } /* 원본 영상은 숨김 */
+    </style>
+</head>
+<body>
+    <div id="ascii-output">재생 버튼을 눌러주세요.</div>
+    <div id="controls"><button id="btn">PLAY / PAUSE</button></div>
+
+    <video id="video" loop crossorigin="anonymous">
+        <source src="badapple.mp4" type="video/mp4">
+    </video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const output = document.getElementById('ascii-output');
+        const btn = document.getElementById('btn');
+
+        // 명도별 ASCII 문자 선택 (자료 참고)
+        const asciiChars = " .-:=+*#%@"; 
+        const charRatio = 0.55; // 문자의 가로세로 비율 보정
+
+        function render() {
+            if (video.paused || video.ended) return;
+
+            // 1. 캔버스 해상도 설정 (성능을 위해 120x90 정도로 조절)
+            const w = 120;
+            const h = Math.floor(w / (video.videoWidth / video.videoHeight) * charRatio);
+            canvas.width = w; canvas.height = h;
+
+            // 2. 현재 프레임 캡처 및 픽셀 데이터 추출
+            ctx.drawImage(video, 0, 0, w, h);
+            const data = ctx.getImageData(0, 0, w, h).data;
+            let art = "";
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const i = (y * w + x) * 4;
+                    // 그레이스케일 변환 알고리즘
+                    const gray = (data[i] + data[i+1] + data[i+2]) / 3;
+                    const charIdx = Math.floor((gray / 255) * (asciiChars.length - 1));
+                    art += asciiChars[charIdx];
+                }
+                art += "\n";
+            }
+
+            output.textContent = art;
+            // 반응형 폰트 크기 계산
+            output.style.fontSize = (window.innerWidth / w * 1.5) + "px";
+
+            requestAnimationFrame(render); // 60fps 유지 최적화
+        }
+
+        btn.onclick = () => {
+            if (video.paused) { video.play(); render(); }
+            else { video.pause(); }
+        };
+    </script>
+</body>
+</html>
